@@ -1,0 +1,50 @@
+name: valve_insertion_p2p_image_desired
+
+image_shape: [3, 240, 320]
+# Observations remain in the original cropped dataset. Only the compact action
+# sidecar changes the target from next measured state to recorded desired pose.
+dataset_path: /home/iris/Workspace/junsu/DP/data/datasets/valve_insertion_after_grasp_30f
+action_dataset_path: /home/iris/Workspace/junsu/DP/data/datasets/valve_insertion_after_grasp_desired_actions_30f
+
+shape_meta: &shape_meta
+  obs:
+    external_img:
+      shape: ${task.image_shape}
+      type: rgb
+    left_wrist_img:
+      shape: ${task.image_shape}
+      type: rgb
+    left_robot_tcp_pose:
+      shape: [9]
+      type: low_dim
+    # Force/torque remains an explicit policy input for insertion.
+    left_robot_tcp_wrench:
+      shape: [6]
+      type: low_dim
+  action:
+    # Recorded desired TCP command, made relative by P2PImageDataset.
+    # Insertion-only policy has no gripper output and no goal-pose input.
+    shape: [9]
+
+# Training-only runner. Real grasp and insertion rollout must use a dedicated
+# state machine so no hardware is accessed by offline training.
+env_runner:
+  _target_: diffusion_policy.env_runner.real_pusht_image_runner.RealPushTImageRunner
+
+dataset:
+  _target_: diffusion_policy.dataset.p2p_image_dataset.P2PImageDataset
+  shape_meta: *shape_meta
+  dataset_path: ${task.dataset_path}
+  action_dataset_path: ${task.action_dataset_path}
+  horizon: ${horizon}
+  pad_before: ${eval:'${dataset_obs_steps}-1+${n_latency_steps}'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  n_obs_steps: ${dataset_obs_steps}
+  obs_temporal_downsample_ratio: ${obs_temporal_downsample_ratio}
+  n_latency_steps: ${n_latency_steps}
+  seed: 42
+  val_ratio: 0.1
+  max_train_episodes: null
+  relative_action: true
+  relative_tcp_obs_for_relative_action: true
+  load_to_memory: true

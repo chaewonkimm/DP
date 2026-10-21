@@ -1,0 +1,44 @@
+# Train insertion-only valve DP with the cropped Zarr's next-state action:
+# CUDA_VISIBLE_DEVICES=2 python train.py \
+#   --config-name=train_diffusion_unet_valve_insertion_p2p_image_next_state_workspace
+
+defaults:
+  - train_diffusion_unet_p2p_image_workspace
+  - override task: valve_insertion_p2p_image_next_state
+  - _self_
+
+name: train_diffusion_unet_valve_insertion_p2p_image_next_state
+
+dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+val_dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+logging:
+  project: diffusion_policy_valve_insertion_baseline
+  tags: ["${name}", "${task_name}", "${exp_name}", "post_grasp", "wrench", "next_state", "no_goal"]
+
+training:
+  num_epochs: 800
+  validation_use_ema: true
+
+checkpoint:
+  topk:
+    monitor_key: train_loss
+    mode: min
+    k: 1
+    format_str: epoch={epoch:04d}-train_loss={train_loss:.5f}.ckpt
+  validation_topk:
+    monitor_key: val_loss
+    mode: min
+    k: 1
+    format_str: epoch={epoch:04d}-val_loss={val_loss:.5f}.ckpt
+  milestone_epochs: [200, 400, 600, 800]
+  milestone_format_str: epoch={epoch:04d}-milestone.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false

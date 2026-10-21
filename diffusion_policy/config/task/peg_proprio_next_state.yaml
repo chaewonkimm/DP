@@ -1,0 +1,40 @@
+name: peg_proprio_goal_next_state
+
+# Keep the exact desired-command experiment observations and episode split.
+# Only action is replaced by a compact next-state sidecar.
+dataset_path: /home/iris/Workspace/junsu/Data/replay_buffer/square_peg_in_hole_21mm_20260916_p2p_goal_desired_zarr
+action_dataset_path: /home/iris/Workspace/junsu/DP/data/datasets/square_peg_goal_desired_observations_next_state_actions_30f
+
+shape_meta: &shape_meta
+  obs:
+    left_robot_tcp_pose:
+      shape: [9]
+      type: low_dim
+    left_goal_pose_rel:
+      shape: [9]
+      type: low_dim
+  action:
+    # Next measured TCP state, made relative by P2PImageDataset.
+    shape: [9]
+
+env_runner:
+  _target_: diffusion_policy.env_runner.real_pusht_image_runner.RealPushTImageRunner
+
+dataset:
+  _target_: diffusion_policy.dataset.p2p_image_dataset.P2PImageDataset
+  shape_meta: *shape_meta
+  dataset_path: ${task.dataset_path}
+  action_dataset_path: ${task.action_dataset_path}
+  horizon: ${horizon}
+  pad_before: ${eval:'${dataset_obs_steps}-1+${n_latency_steps}'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  n_obs_steps: ${dataset_obs_steps}
+  obs_temporal_downsample_ratio: ${obs_temporal_downsample_ratio}
+  n_latency_steps: ${n_latency_steps}
+  seed: 42
+  val_ratio: 0.1
+  max_train_episodes: null
+  relative_action: true
+  relative_tcp_obs_for_relative_action: true
+  single_step_obs_keys: [left_goal_pose_rel]
+  load_to_memory: true

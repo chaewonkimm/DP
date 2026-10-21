@@ -1,0 +1,97 @@
+# Square peg-in-hole DP deployment on the remote right arm, without a gripper.
+task:
+  name: square_peg_in_hole_21mm
+  action_dim: 9
+
+checkpoint: data/outputs/2026.10.02/16.46.40_train_diffusion_unet_p2p_image_p2p_image/checkpoints/epoch=0590-train_loss=0.000.ckpt
+weights: ema_model
+device: cuda:0
+num_inference_steps: 8
+# null: random per inference; integer: identical starting noise for every chunk.
+inference_seed: null
+checkpoint_warning: >-
+  This is the train-loss-selected epoch 590 checkpoint, not a validation-selected
+  checkpoint. Use it for deployment plumbing/shadow tests, not as a trusted final
+  policy. Retrain or export a validation-selected EMA checkpoint before reporting
+  robot success rates.
+
+live:
+  # Shadow publishes only the debug topic. Execute mode additionally
+  # requires this flag, explicit safety limits, and the CLI confirmation token.
+  execute_enabled: true
+  # Split DP inference + ROS bridge -> /rightarm/Teleop_RemoteDesired.
+  backend: remote_desired
+  rdp_root: /home/iris/Workspace/junsu/RDP
+  robot_server_ip: 192.168.110.111
+  robot_server_port: 8092
+  device_mapping_server_ip: 127.0.0.1
+  device_mapping_server_port: 8062
+  calibration_path: null
+  # Used only by the optional direct backend; remote_desired uses camera topics.
+  external_camera_serial: null
+  wrist_camera_serial: null
+  camera_resolution: [640, 480]
+  camera_exposure: 120
+  camera_white_balance: 5900
+  sensor_fps: 30
+  state_poll_fps: 60
+  max_sync_skew_seconds: 0.05
+  http_timeout_seconds: 1.0
+  obs_downsample_ratio: 2
+  inference_fps: 10
+  control_fps: 30
+  actions_per_inference: 1
+  duration_seconds: 30
+  observation_timeout_seconds: 10
+  ros_threads: 4
+  remote_desired:
+    bridge_python: /home/iristele/work/seongsu/iris_learning_from_teleop_fr3/iris_teleoperation/.pixi/envs/default/bin/python
+    bridge_script: p2p_remote_desired_real_bridge.py
+    ros_setup_file: /home/iristele/work/seongsu/iris_learning_from_teleop_fr3/iris_teleoperation/install/setup.bash
+    worker_host: 127.0.0.1
+    require_enable: true
+    # Full chunk; use start=4, size=4, prefetch=3 to select action[4:8].
+    chunk_start_index: 0
+    chunk_size: 29
+    prefetch_steps: 8
+    command_publish_rate_hz: 1000
+    state_timeout_seconds: 0.1
+    image_timeout_seconds: 0.2
+    command_target_timeout_seconds: 0.2
+    worker_timeout_seconds: 5.0
+    worker_heartbeat_period_seconds: 0.5
+    worker_disconnect_timeout_seconds: 2.0
+    topics:
+      remote_state: /rightarm/Teleop_Remote
+      remote_desired: /rightarm/Teleop_RemoteDesired
+      remote_desired_shadow: /rightarm/policy_debug/remote_desired_shadow
+      enable: /rightarm/policy_enable
+      dry_run_action: /rightarm/policy_debug/action
+      status: /rightarm/policy_debug/status
+      external_img: /rightarm/cameras/front/image_raw/compressed
+      left_wrist_img: /rightarm/cameras/wrist/image_raw/compressed
+
+safety:
+  # Baseline limits reused by the four low-dimensional peg deployment configs.
+  # These are broad comparison limits; the enable topic and CLI confirmation
+  # remain required for real command publication.
+  workspace_min: [-1, -1, 0]
+  workspace_max: [1, 1, 1]
+  max_translation_step_m: 0.5
+  max_rotation_step_rad: 0.5
+  max_force_n: 150
+  max_torque_nm: 5
+
+gripper:
+  # No gripper hardware or action channel for peg. No publisher is created.
+  mode: disabled
+  remote_desired_mode: disabled
+  ros_command_topic: null
+  mapping_confirmed: false
+  command_threshold: 0.0
+  open_width_m: null
+  closed_width_m: null
+  velocity_mps: null
+  force_limit_n: null
+  width_precision_m: 0.005
+  close_with_force: false

@@ -1,0 +1,22 @@
+defaults:
+  - train_diffusion_unet_p2p_image_workspace
+  - override task: valve_p2p_image
+  - _self_
+
+name: train_diffusion_unet_valve_p2p_image
+
+# The decoded valve buffer occupies about 48GB in host RAM. Avoid registering
+# several additional 225MB image batches as page-locked memory while the square
+# experiment is using its own pinned-memory workers on the same host.
+dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+val_dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+logging:
+  project: diffusion_policy_valve_p2p_baseline

@@ -1,0 +1,117 @@
+# Valve peg-in-hole DP deployment on the single left Franka arm.
+task:
+  name: valve_peg_in_hole
+  action_dim: 10
+
+checkpoint: data/outputs/2026.10.02/20.22.59_train_diffusion_unet_valve_p2p_image_valve_p2p_image/checkpoints/epoch=0510-train_loss=0.000.ckpt
+weights: ema_model
+device: cuda:0
+num_inference_steps: 8
+# null: random per inference; integer: identical starting noise for every chunk.
+inference_seed: null
+checkpoint_warning: >-
+  This is the train-loss-selected epoch 510 checkpoint and that training run
+  stopped before epoch 600. It is not validation-selected. Use it for deployment
+  plumbing/shadow tests, not as a trusted final policy. Retrain or export a
+  validation-selected EMA checkpoint before reporting robot success rates.
+
+live:
+  execute_enabled: true
+  # remote_desired uses the split policy/ROS bridge modeled after
+  # training/runtime/{learned_remote_desired_node.py,
+  # learned_remote_desired_real_bridge.py} in iris_learning_from_teleop_fr3.
+  backend: remote_desired
+  rdp_root: /home/iris/Workspace/junsu/RDP
+  robot_server_ip: 192.168.110.111
+  robot_server_port: 8092
+  device_mapping_server_ip: 127.0.0.1
+  device_mapping_server_port: 8062
+  calibration_path: null
+  external_camera_serial: null
+  wrist_camera_serial: null
+  camera_resolution: [640, 480]
+  camera_exposure: 120
+  camera_white_balance: 5900
+  sensor_fps: 30
+  state_poll_fps: 60
+  max_sync_skew_seconds: 0.05
+  http_timeout_seconds: 1.0
+  obs_downsample_ratio: 2
+  inference_fps: 10
+  control_fps: 30
+  actions_per_inference: 1
+  duration_seconds: 30
+  observation_timeout_seconds: 10
+  ros_threads: 4
+  remote_desired:
+    bridge_python: /home/iristele/work/junsu/iris_learning_from_teleop_fr3/iris_teleoperation/.pixi/envs/default/bin/python
+    bridge_script: p2p_remote_desired_real_bridge.py
+    ros_setup_file: /home/iristele/work/junsu/iris_learning_from_teleop_fr3/iris_teleoperation/install/setup.bash
+    worker_host: 127.0.0.1
+    require_enable: true
+    # Opt in using --ft-bias --confirm-ft-bias-free-space. No hardware tare.
+    # Pose/world and wrench/world axes coincide in the current FR3 configuration.
+    ft_bias:
+      enabled: false
+      free_space_confirmed: false
+      duration_seconds: 0.2
+      min_samples: 5
+      timeout_seconds: 10.0
+      max_sample_gap_seconds: 0.1
+      max_translation_m: 0.002
+      max_rotation_rad: 0.02
+      max_joint_velocity_rad_s: 0.02
+      max_force_std_n: 0.5
+      max_torque_std_nm: 0.05
+      max_bias_force_n: 10.0
+      max_bias_torque_nm: 1.0
+    chunk_size: 29
+    chunk_start_index: 0  # Optional action slice start; default behavior unchanged.
+    prefetch_steps: 8
+    command_publish_rate_hz: 1000
+    state_timeout_seconds: 0.1
+    image_timeout_seconds: 0.2
+    command_target_timeout_seconds: 0.2
+    worker_timeout_seconds: 5.0
+    worker_heartbeat_period_seconds: 0.5
+    worker_disconnect_timeout_seconds: 2.0
+    topics:
+      remote_state: /rightarm/Teleop_Remote
+      remote_desired: /rightarm/Teleop_RemoteDesired
+      remote_desired_shadow: /rightarm/policy_debug/remote_desired_shadow
+      enable: /rightarm/policy_enable
+      dry_run_action: /rightarm/policy_debug/action
+      status: /rightarm/policy_debug/status
+      external_img: /rightarm/cameras/front/image_raw/compressed
+      left_wrist_img: /rightarm/cameras/wrist/image_raw/compressed
+
+safety:
+  workspace_min: [-1, -1, 0]
+  workspace_max: [1, 1, 1]
+  max_translation_step_m: 0.5
+  max_rotation_step_rad: 0.5
+  max_force_n: 150
+  max_torque_nm: 5
+
+gripper:
+  mode: binary_command
+  # Matches junsu's gripper_command publisher: -1=open, +1=close.
+  # Confirm that this checkpoint used that recording stream before execution.
+  mapping_confirmed: true
+  command_threshold: 0.0
+  open_width_m: 0.078
+  closed_width_m: 0.06
+  velocity_mps: 0.1
+  force_limit_n: 30.0
+  width_precision_m: 0.005
+  close_with_force: true
+  # Disable DP gripper output; do not send Move/Grasp or width commands.
+  remote_desired_mode: hold_current
+  action_namespace: /rightarm/remote_right_gripper
+  # User-specified object width: 6 cm, tolerance +/-0.2 cm.
+  grasp_epsilon_inner_m: 0.002
+  grasp_epsilon_outer_m: 0.002
+  command_stability_seconds: 0.1
+  action_timeout_seconds: 5.0
+  allow_remote_desired_hold_current: true
+  ros_command_topic: null

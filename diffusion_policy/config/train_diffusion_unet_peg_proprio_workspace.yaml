@@ -1,0 +1,58 @@
+# Train (relative TCP + relative goal; no vision, no wrench):
+# CUDA_VISIBLE_DEVICES=0 python train.py \
+#   --config-name=train_diffusion_unet_peg_proprio_workspace
+
+defaults:
+  - train_diffusion_unet_p2p_image_workspace
+  - override task: peg_proprio
+  - _self_
+
+name: train_diffusion_unet_peg_proprio_goal_desired
+
+# MultiImageObsEncoder also supports a low-dimensional-only observation dict.
+# Nulling the RGB model prevents an unused ResNet from being constructed.
+policy:
+  obs_encoder:
+    rgb_model: null
+    resize_shape: null
+    crop_shape: null
+    random_crop: false
+    use_group_norm: false
+    share_rgb_model: false
+    imagenet_norm: false
+
+# Match the valve-insertion run's data-loader settings.
+dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+val_dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+logging:
+  project: diffusion_policy_peg_ablation
+  tags: ["${name}", "${task_name}", "${exp_name}", "proprio_goal", "desired_action", "no_vision", "no_wrench"]
+
+# Match the valve-insertion schedule and validate the EMA inference weights.
+training:
+  num_epochs: 800
+  validation_use_ema: true
+
+checkpoint:
+  topk:
+    monitor_key: train_loss
+    mode: min
+    k: 1
+    format_str: epoch={epoch:04d}-train_loss={train_loss:.5f}.ckpt
+  validation_topk:
+    monitor_key: val_loss
+    mode: min
+    k: 1
+    format_str: epoch={epoch:04d}-val_loss={val_loss:.5f}.ckpt
+  milestone_epochs: [200, 400, 600, 800]
+  milestone_format_str: epoch={epoch:04d}-milestone.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false

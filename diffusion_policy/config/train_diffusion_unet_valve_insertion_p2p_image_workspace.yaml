@@ -1,0 +1,65 @@
+# Build the cropped observation dataset and desired-action sidecar first:
+# python scripts/build_valve_insertion_dataset.py \
+#   --input /home/iris/Workspace/junsu/Data/replay_buffer/valve_peg_in_hole_20260930_no_offset_gripper_zarr \
+#   --output /home/iris/Workspace/junsu/DP/data/datasets/valve_insertion_after_grasp_30f \
+#   --settle-frames 30
+# python scripts/build_valve_insertion_desired_actions.py \
+#   --raw-root /home/iris/Workspace/junsu/Data/raw_bag/valve_peg_in_hole_20260930 \
+#   --insertion-dataset /home/iris/Workspace/junsu/DP/data/datasets/valve_insertion_after_grasp_30f \
+#   --output /home/iris/Workspace/junsu/DP/data/datasets/valve_insertion_after_grasp_desired_actions_30f
+#
+# Train:
+# CUDA_VISIBLE_DEVICES=0 python train.py \
+#   --config-name=train_diffusion_unet_valve_insertion_p2p_image_workspace
+
+defaults:
+  - train_diffusion_unet_p2p_image_workspace
+  - override task: valve_insertion_p2p_image
+  - _self_
+
+name: train_diffusion_unet_valve_insertion_p2p_image_desired
+
+# The cropped dataset is smaller than the full valve buffer, but decoded RGB
+# data is still large. Avoid the CUDA pin-memory failure seen on this host.
+dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+val_dataloader:
+  num_workers: 4
+  pin_memory: false
+  prefetch_factor: 1
+
+logging:
+  project: diffusion_policy_valve_insertion_baseline
+  tags: ["${name}", "${task_name}", "${exp_name}", "post_grasp", "wrench", "desired_action", "no_goal"]
+
+# Validate the same EMA weights that will be used for real-robot rollout.
+training:
+  num_epochs: 800
+  validation_use_ema: true
+
+# Keep all three checkpoint roles separate:
+#   latest.ckpt                         periodic resume point
+#   epoch=...-train_loss=....ckpt       best training loss
+#   epoch=...-val_loss=....ckpt         best EMA validation loss
+# The validation manager checks every validation epoch, independent of the
+# regular checkpoint_every interval.
+checkpoint:
+  topk:
+    monitor_key: train_loss
+    mode: min
+    k: 1
+    format_str: epoch={epoch:04d}-train_loss={train_loss:.5f}.ckpt
+  validation_topk:
+    monitor_key: val_loss
+    mode: min
+    k: 1
+    format_str: epoch={epoch:04d}-val_loss={val_loss:.5f}.ckpt
+  # These are completed-epoch counts, not zero-based loop indices. All four
+  # milestone files are retained independently of latest/top-k replacement.
+  milestone_epochs: [200, 400, 600, 800]
+  milestone_format_str: epoch={epoch:04d}-milestone.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false

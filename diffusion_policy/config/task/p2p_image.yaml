@@ -1,0 +1,47 @@
+name: p2p_image
+
+image_shape: [3, 240, 320]
+dataset_path: /home/iris/Workspace/junsu/Data/replay_buffer/square_peg_in_hole_21mm_20260916_p2p_zarr
+
+shape_meta: &shape_meta
+  obs:
+    external_img:
+      shape: ${task.image_shape}
+      type: rgb
+    left_wrist_img:
+      shape: ${task.image_shape}
+      type: rgb
+    left_robot_tcp_pose:
+      shape: [9]
+      type: low_dim
+    left_robot_tcp_wrench:
+      shape: [6]
+      type: low_dim
+  action:
+    shape: [9]
+
+# Training-only runner. Real-world rollout/evaluation should be wired to the
+# robot separately so offline DP training never tries to access hardware.
+env_runner:
+  _target_: diffusion_policy.env_runner.real_pusht_image_runner.RealPushTImageRunner
+
+dataset:
+  _target_: diffusion_policy.dataset.p2p_image_dataset.P2PImageDataset
+  shape_meta: *shape_meta
+  dataset_path: ${task.dataset_path}
+  horizon: ${horizon}
+  pad_before: ${eval:'${dataset_obs_steps}-1+${n_latency_steps}'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  # Raw observations read before selecting every second frame.
+  n_obs_steps: ${dataset_obs_steps}
+  obs_temporal_downsample_ratio: ${obs_temporal_downsample_ratio}
+  n_latency_steps: ${n_latency_steps}
+  seed: 42
+  val_ratio: 0.1
+  max_train_episodes: null
+  relative_action: true
+  relative_tcp_obs_for_relative_action: true
+  # RDP loads the full decoded buffer into RAM. Keep the same behavior for
+  # training; override to false for lightweight inspection/smoke tests.
+  load_to_memory: true
+

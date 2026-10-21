@@ -1,0 +1,82 @@
+# Real-FR3 rollout: relative TCP + relative goal + LPF wrench -> next state.
+task:
+  name: square_peg_goal_prop_wrench_next_state
+  action_dim: 9
+  expected_checkpoint_task_name: peg_proprio_goal_wrench_next_state
+  expected_observation_keys: [left_robot_tcp_pose, left_goal_pose_rel, left_robot_tcp_wrench]
+  rgb_obs_keys: []
+  target_semantics: next_state
+  require_wrench_filter: true
+  goal_pose_world_9d:
+    [0.61761892, -0.37369144, 0.08422311,
+     0.99915916, 0.03782048, 0.01582829,
+     0.03767658, -0.99924678, 0.00929329]
+
+checkpoint: data/outputs/2026.10.13/16.47.32_train_diffusion_unet_peg_proprio_goal_wrench_next_state_peg_proprio_goal_wrench_next_state/checkpoints/epoch=0780-train_loss=0.00012.ckpt
+weights: ema_model
+device: cuda:0
+num_inference_steps: 8
+inference_seed: null
+checkpoint_warning: >-
+  Train-loss-selected epoch 780 checkpoint; deployment loads its EMA weights.
+  Next-state targets run at 30 Hz and wrench preprocessing matches the causal
+  training-data LPF.
+
+live:
+  # Matches the existing vision+wrench+prop next-state peg deployment profile.
+  execute_enabled: true
+  backend: remote_desired
+  obs_downsample_ratio: 2
+  control_fps: 30
+  duration_seconds: 30
+  remote_desired:
+    bridge_python: /home/iristele/work/seongsu/iris_learning_from_teleop_fr3/iris_teleoperation/.pixi/envs/default/bin/python
+    bridge_script: p2p_remote_desired_real_bridge.py
+    ros_setup_file: /home/iristele/work/seongsu/iris_learning_from_teleop_fr3/iris_teleoperation/install/setup.bash
+    worker_host: 127.0.0.1
+    require_enable: true
+    chunk_start_index: 0
+    chunk_size: 29
+    prefetch_steps: 8
+    command_publish_rate_hz: 1000
+    state_timeout_seconds: 0.1
+    image_timeout_seconds: 0.2
+    command_target_timeout_seconds: 0.2
+    worker_timeout_seconds: 5.0
+    worker_heartbeat_period_seconds: 0.5
+    worker_disconnect_timeout_seconds: 2.0
+    wrench_filter:
+      enabled: true
+      cutoff_hz: 15.0
+      order: 2
+      sample_rate_hz: 1001.74
+      resample: true
+    topics:
+      remote_state: /rightarm/Teleop_Remote
+      remote_desired: /rightarm/Teleop_RemoteDesired
+      remote_desired_shadow: /rightarm/policy_debug/remote_desired_shadow
+      enable: /rightarm/policy_enable
+      dry_run_action: /rightarm/policy_debug/action
+      status: /rightarm/policy_debug/status
+
+safety:
+  # Kept identical to p2p_peg_franka.yaml for baseline comparison.
+  workspace_min: [-1, -1, 0]
+  workspace_max: [1, 1, 1]
+  max_translation_step_m: 0.5
+  max_rotation_step_rad: 0.5
+  max_force_n: 150
+  max_torque_nm: 5
+
+gripper:
+  mode: disabled
+  remote_desired_mode: disabled
+  ros_command_topic: null
+  mapping_confirmed: false
+  command_threshold: 0.0
+  open_width_m: null
+  closed_width_m: null
+  velocity_mps: null
+  force_limit_n: null
+  width_precision_m: 0.005
+  close_with_force: false
